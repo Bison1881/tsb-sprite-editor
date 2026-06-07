@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TSB Sprite Editor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#060810; --surface:#080e18; --surface2:#0c1420; --surface3:#101a28;
+    --border:#1a2a40; --border-bright:#2a4060;
+    --phosphor:#00aaff; --phosphor-dim:#0055aa; --phosphor-dark:#002244;
+    --amber:#f5a623; --red:#ff3333; --blue:#00aaff;
+    --text:#c8ddf0; --text-dim:#5a7a9a; --text-muted:#1a3050;
+    --pixel-border: 1px solid #1a2a40;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:'Share Tech Mono',monospace;
+    min-height:100vh; overflow-x:hidden;
+  }
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:9999;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,10,30,0.08) 2px,rgba(0,10,30,0.08) 3px);
+  }
+
+  /* HEADER */
+  .header {
+    background:var(--surface); border-bottom:2px solid var(--phosphor-dark);
+    padding:0 16px; display:flex; align-items:center; justify-content:space-between;
+    height:52px; position:sticky; top:0; z-index:200;
+    box-shadow:0 0 30px rgba(0,170,255,0.08);
+  }
+  .header-title {
+    font-family:'Orbitron',sans-serif; font-size:18px; font-weight:900;
+    letter-spacing:4px; color:var(--phosphor);
+    text-shadow:0 0 20px rgba(0,170,255,0.5);
+  }
+  .header-sub { font-size:9px; color:var(--text-muted); letter-spacing:2px; margin-top:2px; }
+  .header-right { display:flex; align-items:center; gap:10px; font-size:11px; }
+  .status { display:flex; align-items:center; gap:6px; color:var(--text-dim); }
+  .status-dot { width:6px; height:6px; border-radius:50%; background:var(--text-muted); }
+  .status-dot.on { background:var(--phosphor); box-shadow:0 0 8px var(--phosphor); animation:blink 2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ACTION BAR */
+  .action-bar {
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:0 14px; display:flex; align-items:center; gap:8px; height:36px;
+    position:sticky; top:52px; z-index:199;
+  }
+  .btn {
+    font-family:'Orbitron',sans-serif; font-size:10px; letter-spacing:2px;
+    padding:4px 12px; border:1px solid var(--border-bright);
+    background:var(--surface2); color:var(--text-dim); cursor:pointer; transition:all 0.12s;
+  }
+  .btn:hover:not(:disabled) { border-color:var(--phosphor); color:var(--phosphor); background:rgba(0,170,255,0.05); }
+  .btn.primary { border-color:var(--phosphor); color:var(--phosphor); background:rgba(0,170,255,0.07); }
+  .btn.primary:hover { background:rgba(0,170,255,0.14); }
+  .btn:disabled { opacity:0.25; cursor:default; }
+  .btn.danger { border-color:var(--red); color:var(--red); }
+  .btn.danger:hover { background:rgba(255,51,51,0.08); }
+  .sep { width:1px; height:18px; background:var(--border); flex-shrink:0; margin:0 3px; }
+  .label { font-size:9px; color:var(--text-muted); letter-spacing:2px; white-space:nowrap; }
+
+  /* LAYOUT */
+  .app { display:flex; height:calc(100vh - 88px); overflow:hidden; }
+
+  /* LEFT PANEL */
+  .left-panel {
+    width:220px; min-width:220px; background:var(--surface);
+    border-right:1px solid var(--border); overflow-y:auto; display:flex; flex-direction:column;
+  }
+  .panel-section { border-bottom:1px solid var(--border); padding:10px; }
+  .panel-title {
+    font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:3px;
+    color:var(--phosphor-dim); margin-bottom:8px;
+  }
+
+  /* TEAM SELECTOR */
+  .team-sel {
+    background:var(--surface2); border:1px solid var(--border-bright);
+    color:var(--text); font-family:'Share Tech Mono',monospace; font-size:11px;
+    padding:5px 8px; width:100%; outline:none; cursor:pointer;
+  }
+  .team-sel:focus { border-color:var(--phosphor); }
+  .team-sel option { background:var(--surface2); }
+
+  /* TABLE TYPE */
+  .table-btns { display:flex; gap:4px; flex-direction:column; }
+  .table-btn {
+    font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:1px;
+    padding:5px 8px; border:1px solid var(--border); background:var(--surface2);
+    color:var(--text-muted); cursor:pointer; text-align:left; transition:all 0.1s;
+  }
+  .table-btn:hover { border-color:var(--border-bright); color:var(--text-dim); }
+  .table-btn.active { border-color:var(--phosphor); color:var(--phosphor); background:rgba(0,170,255,0.06); }
+
+  /* PALETTE DISPLAY */
+  .palette-preview { display:flex; gap:3px; flex-wrap:wrap; margin-top:6px; }
+  .pal-swatch {
+    width:28px; height:28px; border:2px solid transparent; cursor:pointer;
+    position:relative; transition:border-color 0.1s;
+    image-rendering:pixelated;
+  }
+  .pal-swatch:hover { border-color:var(--text-dim); }
+  .pal-swatch.selected { border-color:var(--phosphor); }
+  .pal-swatch-idx {
+    position:absolute; bottom:1px; right:2px;
+    font-size:7px; color:rgba(255,255,255,0.6); font-family:'Share Tech Mono',monospace;
+  }
+
+  /* NES PALETTE PICKER */
+  .nes-palette {
+    display:grid; grid-template-columns:repeat(16,1fr); gap:2px; margin-top:6px;
+  }
+  .nes-color {
+    width:100%; aspect-ratio:1; cursor:pointer; border:1px solid transparent;
+    transition:border-color 0.1s; image-rendering:pixelated;
+  }
+  .nes-color:hover { border-color:rgba(255,255,255,0.5); }
+  .nes-color.selected { border-color:var(--phosphor); box-shadow:0 0 6px var(--phosphor); }
+
+  /* CENTER - TILE SHEET */
+  .center-panel { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+  .tile-sheet-area { flex:1; overflow:auto; padding:14px; background:var(--bg); position:relative; }
+  .tile-sheet-label {
+    font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:3px;
+    color:var(--phosphor-dim); margin-bottom:8px;
+  }
+  .tile-sheet-canvas { image-rendering:pixelated; cursor:crosshair; display:block; }
+  .tile-sheet-canvas:hover { outline:1px solid var(--phosphor-dim); }
+
+  /* RIGHT PANEL - PIXEL EDITOR */
+  .right-panel {
+    width:320px; min-width:320px; background:var(--surface);
+    border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden;
+  }
+  .editor-header {
+    padding:10px 12px 8px; border-bottom:1px solid var(--border);
+    font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:3px; color:var(--phosphor-dim);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .tile-coord { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--phosphor); }
+  .pixel-canvas-wrap { padding:12px; display:flex; justify-content:center; }
+  .pixel-canvas {
+    image-rendering:pixelated; cursor:crosshair;
+    border:1px solid var(--border-bright);
+    box-shadow:0 0 20px rgba(0,170,255,0.08);
+  }
+  .pixel-canvas:hover { border-color:var(--phosphor-dim); }
+
+  /* TILE INFO */
+  .tile-info { padding:8px 12px; border-top:1px solid var(--border); font-size:10px; color:var(--text-dim); }
+  .tile-info-row { display:flex; justify-content:space-between; margin-bottom:4px; }
+
+  /* DROPZONE */
+  .dropzone {
+    border:2px dashed var(--border-bright); padding:60px 40px; text-align:center;
+    cursor:pointer; transition:all 0.2s; background:var(--surface);
+    margin:40px auto; max-width:560px; position:relative; overflow:hidden;
+  }
+  .dropzone::before {
+    content:''; position:absolute; inset:0;
+    background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(0,170,255,0.015) 10px,rgba(0,170,255,0.015) 11px);
+  }
+  .dropzone:hover, .dropzone.drag { border-color:var(--phosphor); box-shadow:0 0 40px rgba(0,170,255,0.1); }
+  .dropzone h2 {
+    font-family:'Orbitron',sans-serif; font-size:22px; font-weight:900;
+    letter-spacing:6px; color:var(--phosphor); margin-bottom:10px; position:relative;
+  }
+  .dropzone p { color:var(--text-dim); font-size:12px; line-height:2; position:relative; }
+  .dropzone small { color:var(--text-muted); font-size:10px; letter-spacing:1px; position:relative; }
+
+  /* TOAST */
+  .toast {
+    position:fixed; bottom:20px; right:20px; padding:8px 16px;
+    background:var(--surface2); border:1px solid var(--phosphor);
+    color:var(--phosphor); font-size:11px; letter-spacing:1px; z-index:1000;
+    animation:fadein 0.15s ease; box-shadow:0 0 20px rgba(0,170,255,0.15);
+  }
+  .toast.err { border-color:var(--red); color:var(--red); }
+  @keyframes fadein { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  ::-webkit-scrollbar { width:4px; height:4px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border-bright); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+// ── CONSTANTS ──────────────────────────────────────────────────────────────────
+
+const HEADER = 16;
+const CHR_START_OFFSET = 0x40010; // file offset where CHR ROM begins
+
+// Palette tables (file offsets)
+const PALETTE_TABLES = [
+  { key:'home', label:'HOME UNIFORM', offset:0x23D5C },
+  { key:'away', label:'AWAY UNIFORM', offset:0x23DCC },
+  { key:'score',label:'SCOREBOARD',   offset:0x343B8 },
+  { key:'field',label:'FIELD/MENU',   offset:0x1A010 },
+];
+
+const TEAM_NAMES = [
+  'BUF BILLS','IND COLTS','MIA DOLPHINS','NE PATRIOTS','NYJ JETS',
+  'CIN BENGALS','CLE BROWNS','HOU OILERS','PIT STEELERS','DEN BRONCOS',
+  'KC CHIEFS','LAR RAIDERS','SD CHARGERS','SEA SEAHAWKS',
+  'WAS REDSKINS','NYG GIANTS','PHI EAGLES','PHX CARDINALS','DAL COWBOYS',
+  'CHI BEARS','DET LIONS','GB PACKERS','MIN VIKINGS','TB BUCCANEERS',
+  'SF 49ERS','LA RAMS','NO SAINTS','ATL FALCONS'
+];
+
+// Full NES master palette (64 colours) as RGB
+const NES_PALETTE_RGB = [
+  [84,84,84],[0,30,116],[8,16,144],[48,0,136],[68,0,100],[92,0,48],[84,4,0],[60,24,0],[32,42,0],[8,58,0],[0,64,0],[0,60,0],[0,50,60],[0,0,0],[0,0,0],[0,0,0],
+  [152,150,152],[8,76,196],[48,50,236],[92,30,228],[136,20,176],[160,20,100],[152,34,32],[120,60,0],[84,90,0],[40,114,0],[8,124,0],[0,118,40],[0,102,120],[0,0,0],[0,0,0],[0,0,0],
+  [236,238,236],[76,154,236],[120,124,236],[176,98,236],[228,84,236],[236,88,180],[236,106,100],[212,136,32],[160,170,0],[116,196,0],[76,208,32],[56,204,108],[56,180,204],[60,60,60],[0,0,0],[0,0,0],
+  [236,238,236],[168,204,236],[188,188,236],[212,178,236],[236,174,236],[236,174,212],[236,180,176],[228,196,144],[204,210,120],[180,222,120],[168,226,144],[152,226,180],[160,214,228],[160,162,160],[0,0,0],[0,0,0],
+];
+
+const nesRgb = idx => {
+  const i = Math.max(0, Math.min(63, idx));
+  return NES_PALETTE_RGB[i];
+};
+const nesHex = idx => { const [r,g,b] = nesRgb(idx); return `rgb(${r},${g},${b})`; };
+
+// ── TILE DECODING ──────────────────────────────────────────────────────────────
+
+const decodeTile = (rom, tileIndex) => {
+  const offset = CHR_START_OFFSET + tileIndex * 16;
+  if (offset + 16 > rom.length) return new Uint8Array(64);
+  const pixels = new Uint8Array(64);
+  for (let row = 0; row < 8; row++) {
+    const p0 = rom[offset + row];
+    const p1 = rom[offset + row + 8];
+    for (let col = 0; col < 8; col++) {
+      const bit = 7 - col;
+      pixels[row * 8 + col] = ((p0 >> bit) & 1) | (((p1 >> bit) & 1) << 1);
+    }
+  }
+  return pixels;
+};
+
+const encodeTile = (pixels) => {
+  // Returns 16 bytes
+  const bytes = new Uint8Array(16);
+  for (let row = 0; row < 8; row++) {
+    let p0 = 0, p1 = 0;
+    for (let col = 0; col < 8; col++) {
+      const bit = 7 - col;
+      const val = pixels[row * 8 + col] & 3;
+      if (val & 1) p0 |= (1 << bit);
+      if (val & 2) p1 |= (1 << bit);
+    }
+    bytes[row] = p0;
+    bytes[row + 8] = p1;
+  }
+  return bytes;
+};
+
+const totalTiles = (rom) => {
+  if (!rom) return 0;
+  const chrSize = rom.length - CHR_START_OFFSET;
+  return Math.floor(chrSize / 16);
+};
+
+// ── NES PALETTE PICKER ─────────────────────────────────────────────────────────
+
+const NesPalettePicker = ({ selected, onSelect }) => (
+  <div className="nes-palette">
+    {Array.from({length:64},(_,i) => (
+      <div key={i} className={`nes-color${selected===i?' selected':''}`}
+        style={{background:nesHex(i)}}
+        title={`NES $${i.toString(16).padStart(2,'0').toUpperCase()}`}
+        onClick={()=>onSelect(i)} />
+    ))}
+  </div>
+);
+
+// ── TEAM PALETTE DISPLAY ───────────────────────────────────────────────────────
+
+const TeamPaletteDisplay = ({ romBuffer, tableOffset, teamIdx, onPaletteChange, selectedSlot, onSlotSelect }) => {
+  if (!romBuffer) return null;
+  const rom = new Uint8Array(romBuffer);
+  const base = tableOffset + teamIdx * 4;
+  const palette = Array.from({length:4}, (_,i) => rom[base + i]);
+
+  return (
+    <div>
+      <div className="palette-preview">
+        {palette.map((nesIdx, slot) => (
+          <div key={slot}
+            className={`pal-swatch${selectedSlot===slot?' selected':''}`}
+            style={{background:nesHex(nesIdx)}}
+            title={`Slot ${slot}: NES $${nesIdx.toString(16).padStart(2,'0').toUpperCase()}`}
+            onClick={()=>onSlotSelect(slot)}>
+            <span className="pal-swatch-idx">{slot}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{fontSize:10,color:'var(--text-muted)',marginTop:6,letterSpacing:1}}>
+        {palette.map((v,i)=>`[${i}]=$${v.toString(16).padStart(2,'0').toUpperCase()}`).join('  ')}
+      </div>
+    </div>
+  );
+};
+
+// ── TILE SHEET CANVAS ──────────────────────────────────────────────────────────
+
+const SHEET_COLS = 32;
+const SHEET_SCALE = 3;
+
+const TileSheet = ({ rom, palette, selectedTile, onSelectTile }) => {
+  const canvasRef = useRef();
+  const n = totalTiles(rom);
+  const rows = Math.ceil(n / SHEET_COLS);
+
+  useEffect(() => {
+    if (!rom || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const W = SHEET_COLS * 8 * SHEET_SCALE;
+    const H = rows * 8 * SHEET_SCALE;
+    canvas.width = W;
+    canvas.height = H;
+
+    const imgData = ctx.createImageData(W, H);
+    const d = imgData.data;
+
+    for (let t = 0; t < n; t++) {
+      const pixels = decodeTile(rom, t);
+      const tc = t % SHEET_COLS;
+      const tr = Math.floor(t / SHEET_COLS);
+      for (let py = 0; py < 8; py++) {
+        for (let px = 0; px < 8; px++) {
+          const palIdx = pixels[py * 8 + px];
+          const nesIdx = palette[palIdx];
+          const [r,g,b] = nesRgb(nesIdx);
+          for (let sy = 0; sy < SHEET_SCALE; sy++) {
+            for (let sx = 0; sx < SHEET_SCALE; sx++) {
+              const ix = (tc * 8 * SHEET_SCALE) + px * SHEET_SCALE + sx;
+              const iy = (tr * 8 * SHEET_SCALE) + py * SHEET_SCALE + sy;
+              const pos = (iy * W + ix) * 4;
+              d[pos]=r; d[pos+1]=g; d[pos+2]=b; d[pos+3]=255;
+            }
+          }
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,170,255,0.1)';
+    ctx.lineWidth = 1;
+    for (let c = 0; c <= SHEET_COLS; c++) {
+      ctx.beginPath(); ctx.moveTo(c*8*SHEET_SCALE,0); ctx.lineTo(c*8*SHEET_SCALE,H); ctx.stroke();
+    }
+    for (let r = 0; r <= rows; r++) {
+      ctx.beginPath(); ctx.moveTo(0,r*8*SHEET_SCALE); ctx.lineTo(W,r*8*SHEET_SCALE); ctx.stroke();
+    }
+
+    // Highlight selected tile
+    if (selectedTile !== null) {
+      const sc = selectedTile % SHEET_COLS;
+      const sr = Math.floor(selectedTile / SHEET_COLS);
+      ctx.strokeStyle = 'rgba(0,170,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sc*8*SHEET_SCALE+1, sr*8*SHEET_SCALE+1, 8*SHEET_SCALE-2, 8*SHEET_SCALE-2);
+    }
+  }, [rom, palette, selectedTile, n, rows]);
+
+  const handleClick = (e) => {
+    if (!canvasRef.current || !rom) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const tc = Math.floor(x / (8 * SHEET_SCALE));
+    const tr = Math.floor(y / (8 * SHEET_SCALE));
+    const tile = tr * SHEET_COLS + tc;
+    if (tile >= 0 && tile < n) onSelectTile(tile);
+  };
+
+  if (!rom) return <div style={{color:'var(--text-muted)',fontSize:12,padding:20}}>Load a ROM to view tiles</div>;
+
+  return (
+    <canvas ref={canvasRef} className="tile-sheet-canvas"
+      style={{width: SHEET_COLS*8*SHEET_SCALE, height: rows*8*SHEET_SCALE}}
+      onClick={handleClick} />
+  );
+};
+
+// ── PIXEL EDITOR ───────────────────────────────────────────────────────────────
+
+const PIXEL_SCALE = 28;
+
+const PixelEditor = ({ rom, tileIndex, palette, selectedPaletteSlot, onPixelChange }) => {
+  const canvasRef = useRef();
+  const [drawing, setDrawing] = useState(false);
+  const [selectedPixelVal, setSelectedPixelVal] = useState(selectedPaletteSlot ?? 1);
+  const pixelsRef = useRef(null);
+
+  const pixels = useMemo(() => {
+    if (!rom || tileIndex === null) return null;
+    return decodeTile(rom, tileIndex);
+  }, [rom, tileIndex]);
+
+  useEffect(() => { pixelsRef.current = pixels; }, [pixels]);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const SIZE = 8 * PIXEL_SCALE;
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+    ctx.fillStyle = '#060a06';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    if (!pixels) {
+      ctx.fillStyle = 'rgba(0,170,255,0.1)';
+      ctx.fillRect(0,0,SIZE,SIZE);
+      return;
+    }
+
+    for (let py = 0; py < 8; py++) {
+      for (let px = 0; px < 8; px++) {
+        const pv = pixels[py*8+px];
+        const nesIdx = palette[pv];
+        const [r,g,b] = nesRgb(nesIdx);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(px*PIXEL_SCALE, py*PIXEL_SCALE, PIXEL_SCALE, PIXEL_SCALE);
+      }
+    }
+
+    // Grid
+    ctx.strokeStyle = 'rgba(0,170,255,0.15)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 8; i++) {
+      ctx.beginPath(); ctx.moveTo(i*PIXEL_SCALE,0); ctx.lineTo(i*PIXEL_SCALE,SIZE); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,i*PIXEL_SCALE); ctx.lineTo(SIZE,i*PIXEL_SCALE); ctx.stroke();
+    }
+  }, [pixels, palette]);
+
+  const getPixelCoord = (e) => {
+    if (!canvasRef.current) return null;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = (8 * PIXEL_SCALE) / rect.width;
+    const scaleY = (8 * PIXEL_SCALE) / rect.height;
+    const x = Math.floor((e.clientX - rect.left) * scaleX / PIXEL_SCALE);
+    const y = Math.floor((e.clientY - rect.top) * scaleY / PIXEL_SCALE);
+    if (x < 0 || x > 7 || y < 0 || y > 7) return null;
+    return { x, y };
+  };
+
+  const paint = (e) => {
+    const coord = getPixelCoord(e);
+    if (!coord || !pixelsRef.current) return;
+    const newPixels = new Uint8Array(pixelsRef.current);
+    newPixels[coord.y * 8 + coord.x] = selectedPixelVal;
+    onPixelChange(tileIndex, newPixels);
+  };
+
+  if (!rom || tileIndex === null) {
+    return (
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--text-muted)',fontSize:11,letterSpacing:2,flexDirection:'column',gap:10}}>
+        <div style={{fontSize:32,opacity:0.2}}>◻</div>
+        SELECT A TILE
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Palette value picker for drawing */}
+      <div style={{padding:'6px 12px',borderBottom:'1px solid var(--border)',display:'flex',gap:6,alignItems:'center'}}>
+        <span style={{fontSize:9,color:'var(--text-muted)',letterSpacing:2}}>DRAW:</span>
+        {[0,1,2,3].map(v=>(
+          <div key={v}
+            onClick={()=>setSelectedPixelVal(v)}
+            style={{
+              width:24,height:24,background:nesHex(palette[v]),
+              border:`2px solid ${selectedPixelVal===v?'var(--phosphor)':'var(--border)'}`,
+              cursor:'pointer',fontSize:9,
+              display:'flex',alignItems:'center',justifyContent:'center',
+              color:'rgba(255,255,255,0.5)',fontFamily:'Share Tech Mono',
+              boxShadow:selectedPixelVal===v?'0 0 8px var(--phosphor)':'none',
+              transition:'all 0.1s'
+            }}>
+            {v}
+          </div>
+        ))}
+        <span style={{fontSize:9,color:'var(--text-muted)',marginLeft:6}}>
+          NES ${palette[selectedPixelVal].toString(16).padStart(2,'0').toUpperCase()}
+        </span>
+      </div>
+
+      {/* Pixel canvas */}
+      <div className="pixel-canvas-wrap">
+        <canvas ref={canvasRef} className="pixel-canvas"
+          style={{width:8*PIXEL_SCALE,height:8*PIXEL_SCALE}}
+          onMouseDown={(e)=>{setDrawing(true); paint(e);}}
+          onMouseMove={(e)=>{if(drawing) paint(e);}}
+          onMouseUp={()=>setDrawing(false)}
+          onMouseLeave={()=>setDrawing(false)} />
+      </div>
+    </div>
+  );
+};
+
+// ── APP ────────────────────────────────────────────────────────────────────────
+
+const App = () => {
+  const [romBuffer, setRomBuffer] = useState(null);
+  const romBufferRef = useRef(null); // always-current ref for export
+  const [romName, setRomName] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [selectedTeam, setSelectedTeam] = useState(0);
+  const [selectedTableKey, setSelectedTableKey] = useState('home');
+  const [selectedTile, setSelectedTile] = useState(null);
+  const [selectedPaletteSlot, setSelectedPaletteSlot] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const fileRef = useRef();
+
+  const showToast = (msg, type='ok') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+
+  // Get current palette (4 NES indices) for the selected team/table
+  const currentPalette = useMemo(() => {
+    if (!romBuffer) return [0x0F,0x30,0x10,0x20];
+    const rom = new Uint8Array(romBuffer);
+    const table = PALETTE_TABLES.find(t=>t.key===selectedTableKey);
+    const base = table.offset + selectedTeam * 4;
+    return Array.from({length:4}, (_,i) => rom[base+i]);
+  }, [romBuffer, selectedTeam, selectedTableKey]);
+
+  const loadRom = file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const raw = e.target.result;
+      const rawArr = new Uint8Array(raw);
+      if (rawArr[0]!==0x4E||rawArr[1]!==0x45||rawArr[2]!==0x53) { showToast('Not a valid NES ROM','err'); return; }
+      if (raw.byteLength < 393232) { showToast('File too small','err'); return; }
+      // Immediately copy into a fresh owned buffer so we can safely mutate later
+      const copy = new Uint8Array(raw.byteLength);
+      copy.set(rawArr);
+      const buf = copy.buffer;
+      romBufferRef.current = buf;
+      setRomBuffer(buf); setRomName(file.name);
+      setDirty(false); setSelectedTile(null);
+      showToast('ROM loaded — CHR ROM: 128KB, 8192 tiles');
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const exportRom = async () => {
+    const buf = romBufferRef.current || romBuffer;
+    if (!buf) return;
+    const filename = romName.replace(/\.nes$/i,'')+'_sprites.nes';
+    const fileData = new Uint8Array(buf);
+
+    // Try File System Access API first (works on file:// in Chrome/Edge)
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'NES ROM', accept: { 'application/octet-stream': ['.nes'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(fileData);
+        await writable.close();
+        showToast('ROM saved');
+        setDirty(false);
+        return;
+      } catch(err) {
+        if (err.name === 'AbortError') return; // user cancelled
+        // fall through to blob method
+      }
+    }
+
+    // Fallback: blob URL download
+    const blob = new Blob([fileData], {type:'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    showToast('ROM exported');
+    setDirty(false);
+  };
+
+  const handlePixelChange = (tileIndex, newPixels) => {
+    if (!romBuffer) return;
+    // Always copy the buffer — never mutate in place
+    const src = new Uint8Array(romBuffer);
+    const copy = new Uint8Array(src.length);
+    copy.set(src);
+    const tileBytes = encodeTile(newPixels);
+    const offset = CHR_START_OFFSET + tileIndex * 16;
+    for (let i = 0; i < 16; i++) copy[offset+i] = tileBytes[i];
+    romBufferRef.current = copy.buffer;
+    setRomBuffer(copy.buffer);
+    setDirty(true);
+  };
+
+  const handleNesColorSelect = (nesIdx) => {
+    if (!romBuffer) return;
+    const src = new Uint8Array(romBuffer);
+    const copy = new Uint8Array(src.length);
+    copy.set(src);
+    const table = PALETTE_TABLES.find(t=>t.key===selectedTableKey);
+    const base = table.offset + selectedTeam * 4;
+    copy[base + selectedPaletteSlot] = nesIdx;
+    romBufferRef.current = copy.buffer;
+    setRomBuffer(copy.buffer);
+    setDirty(true);
+  };
+
+  const rom = romBuffer ? new Uint8Array(romBuffer) : null;
+
+  const selectedTableInfo = PALETTE_TABLES.find(t=>t.key===selectedTableKey);
+
+  return (
+    <div>
+      {/* HEADER */}
+      <div className="header">
+        <div>
+          <div className="header-title">TSB SPRITE EDITOR</div>
+          <div className="header-sub">CHR ROM · NES PALETTE · PIXEL ART</div>
+        </div>
+        <div className="header-right">
+          <div className="status">
+            <div className={`status-dot${romBuffer?' on':''}`}/>
+            <span style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              {romBuffer ? romName : 'NO ROM LOADED'}
+            </span>
+            {dirty && <span style={{color:'var(--amber)',marginLeft:6}}>● MODIFIED</span>}
+          </div>
+          {romBuffer && (
+            <button className="btn danger" onClick={()=>{
+              if(dirty&&!window.confirm('Discard unsaved changes?')) return;
+              setRomBuffer(null); setRomName(''); setDirty(false); setSelectedTile(null);
+              showToast('ROM ejected');
+            }}>⏏ EJECT</button>
+          )}
+        </div>
+      </div>
+
+      {/* ACTION BAR */}
+      <div className="action-bar">
+        <button className="btn primary" onClick={exportRom} disabled={!romBuffer}>EXPORT ROM</button>
+        <div className="sep"/>
+        <span className="label">
+          {romBuffer ? `${totalTiles(rom).toLocaleString()} TILES  ·  CHR 0x40010–0x60010` : 'LOAD ROM TO BEGIN'}
+        </span>
+        {selectedTile !== null && (
+          <>
+            <div className="sep"/>
+            <span className="label">TILE #{selectedTile} (0x{selectedTile.toString(16).toUpperCase()}) · CHR+{(selectedTile*16).toString(16).toUpperCase().padStart(4,'0')}</span>
+          </>
+        )}
+      </div>
+
+      {/* BODY */}
+      {!romBuffer ? (
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'calc(100vh - 88px)'}}>
+          <div className={`dropzone${dragOver?' drag':''}`}
+            onDrop={e=>{e.preventDefault();setDragOver(false);if(e.dataTransfer.files[0])loadRom(e.dataTransfer.files[0]);}}
+            onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+            onDragLeave={()=>setDragOver(false)}
+            onClick={()=>fileRef.current.click()}>
+            <h2>LOAD ROM</h2>
+            <p>Drag and drop your Tecmo Super Bowl ROM<br/>or click to browse</p>
+            <small>Tecmo Super Bowl (USA).nes · NES · 1991</small>
+            <input ref={fileRef} type="file" accept=".nes" style={{display:'none'}} onChange={e=>{if(e.target.files[0])loadRom(e.target.files[0]);}}/>
+          </div>
+        </div>
+      ) : (
+        <div className="app">
+
+          {/* LEFT PANEL */}
+          <div className="left-panel">
+
+            {/* Team selector */}
+            <div className="panel-section">
+              <div className="panel-title">TEAM</div>
+              <select className="team-sel" value={selectedTeam} onChange={e=>setSelectedTeam(parseInt(e.target.value))}>
+                {TEAM_NAMES.map((t,i)=><option key={i} value={i}>{i.toString().padStart(2,'0')} · {t}</option>)}
+              </select>
+            </div>
+
+            {/* Palette table selector */}
+            <div className="panel-section">
+              <div className="panel-title">COLOUR TABLE</div>
+              <div className="table-btns">
+                {PALETTE_TABLES.map(t=>(
+                  <button key={t.key} className={`table-btn${selectedTableKey===t.key?' active':''}`}
+                    onClick={()=>setSelectedTableKey(t.key)}>
+                    {t.label}
+                    <span style={{float:'right',fontSize:9,color:'var(--text-muted)'}}>0x{t.offset.toString(16).toUpperCase()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Current palette */}
+            <div className="panel-section">
+              <div className="panel-title">TEAM PALETTE · {selectedTableInfo.label}</div>
+              <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>
+                {TEAM_NAMES[selectedTeam]}
+              </div>
+              <TeamPaletteDisplay
+                romBuffer={romBuffer}
+                tableOffset={selectedTableInfo.offset}
+                teamIdx={selectedTeam}
+                onPaletteChange={handleNesColorSelect}
+                selectedSlot={selectedPaletteSlot}
+                onSlotSelect={setSelectedPaletteSlot}/>
+              <div style={{marginTop:8,fontSize:10,color:'var(--phosphor-dim)',letterSpacing:1}}>
+                EDITING SLOT [{selectedPaletteSlot}] — PICK NES COLOUR ▼
+              </div>
+            </div>
+
+            {/* NES colour picker */}
+            <div className="panel-section" style={{flex:1}}>
+              <div className="panel-title">NES MASTER PALETTE (64)</div>
+              <NesPalettePicker
+                selected={currentPalette[selectedPaletteSlot]}
+                onSelect={handleNesColorSelect}/>
+              <div style={{marginTop:8,fontSize:9,color:'var(--text-muted)',lineHeight:1.6}}>
+                Slot {selectedPaletteSlot} → NES ${currentPalette[selectedPaletteSlot].toString(16).padStart(2,'0').toUpperCase()}
+                <br/>{nesHex(currentPalette[selectedPaletteSlot])}
+              </div>
+            </div>
+
+          </div>
+
+          {/* CENTER - TILE SHEET */}
+          <div className="center-panel">
+            <div className="tile-sheet-area">
+              <div className="tile-sheet-label">
+                CHR ROM TILE SHEET · {SHEET_COLS} WIDE · {totalTiles(rom)} TILES
+              </div>
+              <TileSheet
+                rom={rom}
+                palette={currentPalette}
+                selectedTile={selectedTile}
+                onSelectTile={setSelectedTile}/>
+            </div>
+          </div>
+
+          {/* RIGHT PANEL - PIXEL EDITOR */}
+          <div className="right-panel">
+            <div className="editor-header">
+              <span>PIXEL EDITOR</span>
+              {selectedTile !== null && <span className="tile-coord">TILE #{selectedTile}</span>}
+            </div>
+            <PixelEditor
+              rom={rom}
+              tileIndex={selectedTile}
+              palette={currentPalette}
+              selectedPaletteSlot={selectedPaletteSlot}
+              onPixelChange={handlePixelChange}/>
+            {selectedTile !== null && (
+              <div className="tile-info">
+                <div className="tile-info-row">
+                  <span>CHR OFFSET</span>
+                  <span style={{color:'var(--phosphor)'}}>0x{(CHR_START_OFFSET + selectedTile*16).toString(16).toUpperCase()}</span>
+                </div>
+                <div className="tile-info-row">
+                  <span>TILE INDEX</span>
+                  <span style={{color:'var(--phosphor)'}}>{selectedTile} (0x{selectedTile.toString(16).toUpperCase()})</span>
+                </div>
+                <div className="tile-info-row">
+                  <span>CHR BANK</span>
+                  <span style={{color:'var(--phosphor)'}}>{Math.floor(selectedTile / 512)} (tile {selectedTile % 512} in bank)</span>
+                </div>
+                <div style={{marginTop:8,fontSize:9,color:'var(--text-muted)',lineHeight:1.6}}>
+                  Left-click to paint. Pick palette slot colour above, then draw on canvas. Changes write to CHR ROM.
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {toast && <div className={`toast${toast.type==='err'?' err':''}`}>{toast.msg}</div>}
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
